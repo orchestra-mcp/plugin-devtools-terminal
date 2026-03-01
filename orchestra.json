@@ -1,0 +1,23 @@
+{
+    "name": "orchestra-mcp/plugin-devtools-terminal",
+    "description": "devtools-terminal tools plugin for Orchestra MCP.",
+    "type": "tools",
+    "license": "MIT",
+    "homepage": "https://orchestra-mcp.dev",
+    "support": {
+        "issues": "https://github.com/orchestra-mcp/plugin-devtools-terminal/issues",
+        "source": "https://github.com/orchestra-mcp/plugin-devtools-terminal"
+    },
+    "require": {
+        "orchestra-mcp/gen-go": "^0.1.0",
+        "orchestra-mcp/sdk-go": "^0.1.0"
+    },
+    "bin": "devtools-terminal",
+    "extra": {
+        "plugin-id": "tools.devtools-terminal",
+        "provides": ["tools"],
+        "branch-alias": {
+            "dev-master": "0.1.x-dev"
+        }
+    }
+}
