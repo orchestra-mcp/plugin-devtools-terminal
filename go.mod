@@ -4,8 +4,8 @@ go 1.23
 
 require (
 	github.com/creack/pty v1.1.24
-	github.com/orchestra-mcp/gen-go v0.1.2
-	github.com/orchestra-mcp/sdk-go v0.1.2
+	github.com/orchestra-mcp/gen-go v0.1.3
+	github.com/orchestra-mcp/sdk-go v0.1.3
 	google.golang.org/protobuf v1.36.11
 )
 
