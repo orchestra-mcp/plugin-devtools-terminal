@@ -9,7 +9,7 @@ import (
 // ToolsPlugin holds the PTY manager and registers all terminal tools.
 type ToolsPlugin struct{}
 
-// RegisterTools registers all 6 terminal tools with the plugin builder.
+// RegisterTools registers all 7 terminal tools (6 regular + 1 streaming) with the plugin builder.
 func (tp *ToolsPlugin) RegisterTools(builder *plugin.PluginBuilder) {
 	mgr := pty.NewManager()
 
@@ -36,4 +36,8 @@ func (tp *ToolsPlugin) RegisterTools(builder *plugin.PluginBuilder) {
 	builder.RegisterTool("close_terminal",
 		"Close a terminal session",
 		tools.CloseTerminalSchema(), tools.CloseTerminal(mgr))
+
+	builder.RegisterStreamingTool("terminal_stream",
+		"Stream real-time output from a terminal session",
+		tools.TerminalStreamSchema(), tools.TerminalStream(mgr))
 }

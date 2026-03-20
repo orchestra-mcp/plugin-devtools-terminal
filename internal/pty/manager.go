@@ -29,6 +29,11 @@ type Session struct {
 	mu     sync.Mutex
 	cols   int
 	rows   int
+
+	// Subscriber fan-out for real-time streaming.
+	subscribersMu sync.Mutex
+	subscribers   map[int]chan []byte
+	nextSubID     int
 }
 
 // Manager manages multiple PTY terminal sessions.
@@ -87,24 +92,48 @@ func (m *Manager) Create(shell string, cols, rows int) (string, error) {
 	}
 
 	sess := &Session{
-		ID:   id,
-		cmd:  cmd,
-		ptmx: ptmx,
-		cols: cols,
-		rows: rows,
+		ID:          id,
+		cmd:         cmd,
+		ptmx:        ptmx,
+		cols:        cols,
+		rows:        rows,
+		subscribers: make(map[int]chan []byte),
 	}
 
-	// Background goroutine reads from ptmx into buffer.
+	// Background goroutine reads from ptmx into buffer and fans out to subscribers.
 	go func() {
 		buf := make([]byte, 4096)
 		for {
 			n, err := ptmx.Read(buf)
 			if n > 0 {
+				data := make([]byte, n)
+				copy(data, buf[:n])
+
+				// Write to poll buffer (backward compat with get_output).
 				sess.mu.Lock()
-				sess.output.Write(buf[:n])
+				sess.output.Write(data)
 				sess.mu.Unlock()
+
+				// Fan out to all streaming subscribers.
+				sess.subscribersMu.Lock()
+				for _, ch := range sess.subscribers {
+					select {
+					case ch <- data:
+					default:
+						// Drop if subscriber is slow — prevents blocking the reader.
+					}
+				}
+				sess.subscribersMu.Unlock()
 			}
 			if err != nil {
+				// Close all subscriber channels on PTY close/EOF.
+				sess.subscribersMu.Lock()
+				for id, ch := range sess.subscribers {
+					close(ch)
+					delete(sess.subscribers, id)
+				}
+				sess.subscribersMu.Unlock()
+
 				if err != io.EOF {
 					// PTY closed or process exited; stop reading.
 				}
@@ -118,6 +147,37 @@ func (m *Manager) Create(shell string, cols, rows int) (string, error) {
 	m.mu.Unlock()
 
 	return id, nil
+}
+
+// Subscribe creates a channel that receives a copy of all PTY output for the
+// given session. Returns the read channel and an unsubscribe function. The
+// caller MUST call the unsubscribe function when done to prevent leaks.
+func (m *Manager) Subscribe(id string) (<-chan []byte, func(), error) {
+	m.mu.RLock()
+	sess, ok := m.sessions[id]
+	m.mu.RUnlock()
+	if !ok {
+		return nil, nil, fmt.Errorf("terminal session %q not found", id)
+	}
+
+	ch := make(chan []byte, 64)
+
+	sess.subscribersMu.Lock()
+	subID := sess.nextSubID
+	sess.nextSubID++
+	sess.subscribers[subID] = ch
+	sess.subscribersMu.Unlock()
+
+	unsub := func() {
+		sess.subscribersMu.Lock()
+		if _, exists := sess.subscribers[subID]; exists {
+			delete(sess.subscribers, subID)
+			close(ch)
+		}
+		sess.subscribersMu.Unlock()
+	}
+
+	return ch, unsub, nil
 }
 
 // SendInput writes input to the terminal session's PTY.
